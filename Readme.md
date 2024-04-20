@@ -1,4 +1,4 @@
-# Treinando React
+# Treinando Java
 
 Após ter aprendido Python, essa imagem é a que mais define minha visão sobre Java:
 <div align="center">
