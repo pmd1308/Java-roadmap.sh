@@ -11,12 +11,14 @@ import java.net.http.HttpResponse;
 import java.sql.*;
 import java.util.HashMap;
 import java.util.Map;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
 
 public class CurrencyConverterGUI extends JFrame {
 
     private static final String API_URL = "https://api.exchangerate-api.com/v4/latest/";
     private static final Map<String, String> CURRENCIES = new HashMap<>();
-    private static final String DB_URL = "";
+    private static final String DB_URL = Sytem.getenv('CURRENCY_CONVERTER_DB');
     private static final String INSERT_OPERATION_SQL = "INSERT INTO operations ( " + 
                                                     "source_currency, " + 
                                                     "target_currency, " + 
@@ -29,17 +31,19 @@ public class CurrencyConverterGUI extends JFrame {
     private JTextField sourceAmountField;
     private JTextField targetAmountField;
     private JButton convertButton;
+    private ExecutorService executorService = Executors.newSingleThreadExecutor();
 
+    // Load the program sequencialy
     public CurrencyConverterGUI() {
-        loadAndSetupUI(); // Load currencies and setup UI
+        loadAndSetupUI();
         pack();
         setLocationRelativeTo(null);
         setVisible(true);
     }
 
     private void loadAndSetupUI() {
-        loadCurrencies(); // Load currencies from the map
-        initializeDatabase(); // Initialize the SQLite database
+        loadCurrencies(); // Load map thats contains the currency
+        initializeDatabase();
         setupUI(); // Setup the user interface
     }
 
@@ -52,7 +56,7 @@ public class CurrencyConverterGUI extends JFrame {
     }
 
     private void initializeDatabase() {
-        try (Connection conn = DriverManager.getConnection("jdbc:sqlite:currency_converter.db");
+        try (Connection conn = DriverManager.getConnection(DB_URL);
              Statement stmt = conn.createStatement()) {
             stmt.execute("CREATE TABLE IF NOT EXISTS operations " + 
                         "id INTEGER PRIMARY KEY AUTOINCREMENT, " + 
@@ -61,9 +65,7 @@ public class CurrencyConverterGUI extends JFrame {
                         "source_amount REAL, " + 
                         "target_amount REAL)");
         } catch (SQLException e) {
-            JOptionPane.showMessageDialog(null, "Invalid price.",
-                                        "Error", 
-                                        JOptionPane.ERROR_MESSAGE);
+            e.printStackTrace();
         }
         }
     }
@@ -122,46 +124,41 @@ public class CurrencyConverterGUI extends JFrame {
         return null;
     }
 
-    private double convertCurrency(String sourceCurrency, String targetCurrency, double sourceAmount) throws IOException, URISyntaxException {
-        double exchangeRate = getExchangeRate(sourceCurrency, targetCurrency);
-        return sourceAmount * exchangeRate;
-    }
-
-    private double getExchangeRate(String sourceCurrency, String targetCurrency) throws IOException, URISyntaxException {
-        HttpClient client = HttpClient.newHttpClient();
-        HttpRequest request = HttpRequest.newBuilder()
-                .uri(new URI(API_URL + sourceCurrency))
-                .build();
-
+    private double convertCurrency(String sourceCurrency, String targetCurrency, double sourceAmount) throws IOException, URISyntaxException, NumberFormatException {
+        HttpClient client = HttpClient.newHTTPClient();
+        HttpRequest request = Client.newBuilder()
+                                    .uri(new URI(API_URL + sourceCurrency))
+                                    .build();
         HttpResponse<String> response = client.send(request, HttpResponse.BodyHandlers.ofString());
-
-        if (response.statusCode() == 200) {
+        if (response.isSuccess()) {
             String responseBody = response.body();
-            String targetCurrencyRate = "\"" + targetCurrency + "\":";
-
-            int startIndex = responseBody.indexOf(targetCurrencyRate) + targetCurrencyRate.length() + 1;
-            int endIndex = responseBody.indexOf(",", startIndex);
-
-            return Double.parseDouble(responseBody.substring(startIndex, endIndex));
+            JsonObject jsonObject = JsonParser.parseString(responseBody).getAsJsonObject();
+            JsonObject rates = jsonObject.get("rates").getAsJsonObject();
+            return sourceAmount * rates.get(targetCurrency).getAsDouble();
         } else {
-            throw new RuntimeException("Error getting exchange rate: Status " + response.statusCode());
+            throw new RuntimeException("Error getting exchange rates: Status: " + response.statusCode());;
         }
     }
+
+
 
     private void saveOperation(String sourceCurrency, String targetCurrency, double sourceAmount, double targetAmount) {
-        try (Connection conn = DriverManager.getConnection(DB_URL);
-             PreparedStatement pstmt = conn.prepareStatement(INSERT_OPERATION_SQL)) {
-            pstmt.setString(1, sourceCurrency);
-            pstmt.setString(2, targetCurrency);
-            pstmt.setDouble(3, sourceAmount);
-            pstmt.setDouble(4, targetAmount);
-            pstmt.executeUpdate();
-        } catch (SQLException e) {
-            e.printStackTrace();
-        }
+        executorService.submit(() -> {
+            try (Connection conn = DriverManager.getConnection(DB_URL);
+                PreparedStatement pstmt = conn.prepareStatement(INSERT_OPERATION_SQL)) {
+                pstmt.setString(1, sourceCurrency);
+                pstmt.setString(2, targetCurrency);
+                pstmt.setDouble(3, sourceAmount);
+                pstmt.setDouble(4, targetAmount);
+                pstmt.executeUpdate();
+                conn.close();
+            } catch (SQLException e) {
+                e.printStackTrace();
+            }
+        });
     }
 
     public static void main(String[] args) {
         SwingUtilities.invokeLater(CurrencyConverterGUI::new);
     }
-}
+
