@@ -1,6 +1,6 @@
 # DIO Banking Application API
 
-Projeto proposto pela [Digital Innovation One](https://www.dio.me) (DIO) para um aprofundamento de Java usando o Spring Boot. O objetivo é a aplicação do Spring no uso de APIs, onde melhorei um pouco o projeto original que pode ser encontrado [aqui](https://github.com/digitalinnovationone/santander-dev-week-2023-api/tree/main)
+Projeto proposto pela [Digital Innovation One](https://www.dio.me) (DIO) para um aprofundamento de Java usando o Spring Boot. O objetivo é a aplicação do Spring no uso de APIs, onde melhorei um pouco o projeto original que pode ser encontrado [aqui](https://github.com/digitalinnovationone/santander-dev-week-2023-api/tree/main/src/main/java/me/dio)
 
 ## O que foi aplicado e estudado
 
